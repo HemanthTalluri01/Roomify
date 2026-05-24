@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useState, useRef, useEffect} from 'react';
 import {useOutletContext} from "react-router";
 import {CheckCircle2, ImageIcon, UploadIcon} from "lucide-react";
 import {PROGRESS_INTERVAL_MS, PROGRESS_STEP, REDIRECT_DELAY_MS} from "../../lib/constants";
@@ -13,26 +13,66 @@ const Upload = ({ onComplete }: UploadProps) => {
     const[progress,setProgress] = useState(0);
     const{ isSignedIn } = useOutletContext<AuthContext>();
 
+    const readerRef = useRef<FileReader | null>(null);
+    const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const mountedRef = useRef(true);
+
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => {
+            mountedRef.current = false;
+            if (readerRef.current) {
+                readerRef.current.abort();
+            }
+            if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+            }
+            if (timeoutRef.current) {
+                clearTimeout(timeoutRef.current);
+            }
+        };
+    }, []);
+
     const processFile = (file: File) => {
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        if (readerRef.current) readerRef.current.abort();
+
         setFile(file);
         setProgress(0);
 
         const reader = new FileReader();
+        readerRef.current = reader;
+
         reader.onloadend = () => {
+            if (!mountedRef.current) return;
             const base64 = reader.result as string;
+            
             const interval = setInterval(() => {
+                if (!mountedRef.current) {
+                    clearInterval(interval);
+                    return;
+                }
                 setProgress((prev) => {
                     const next = prev + PROGRESS_STEP;
                     if (next >= 100) {
                         clearInterval(interval);
-                        setTimeout(() => {
-                            onComplete(base64);
+                        intervalRef.current = null;
+                        
+                        const timeout = setTimeout(() => {
+                            if (mountedRef.current) {
+                                onComplete(base64);
+                            }
                         }, REDIRECT_DELAY_MS);
+                        timeoutRef.current = timeout;
+                        
                         return 100;
                     }
                     return next;
                 });
             }, PROGRESS_INTERVAL_MS);
+            intervalRef.current = interval;
         };
         reader.readAsDataURL(file);
     };

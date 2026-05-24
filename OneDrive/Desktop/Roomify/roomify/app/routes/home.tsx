@@ -12,12 +12,12 @@ export function meta({}: Route.MetaArgs) {
 }
 
 export default function Home() {
-  const naviagte = useNavigate();
+  const navigate = useNavigate();
 
   const handleUploadComplete = async (base64: string) => {
     const newId = Date.now().toString();
 
-    naviagte(`/visualizer/${newId}`);
+    navigate(`/visualizer/${newId}`);
 
     return true;
   }
