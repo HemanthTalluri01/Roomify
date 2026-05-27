@@ -17,15 +17,6 @@ export const getOrCreateHostingConfig = async (): Promise<HostingConfig | null> 
 
     const subdomain = createHostingSlug();
     try {
-<<<<<<< HEAD
-        const created = await getHosting().create(subdomain, '.');
-        const config = { subdomain: created.subdomain };
-        await getKv().set(HOSTING_CONFIG_KEY, config);
-        return config;
-    }
-    catch (e){
-        console.error(`Could not  find subdomain: ${e}`);
-=======
         const created = await getHosting().create(subdomain, ".");
         const record = { subdomain: created.subdomain };
 
@@ -33,7 +24,6 @@ export const getOrCreateHostingConfig = async (): Promise<HostingConfig | null> 
         return record;
     } catch (e) {
         console.error(`Could not create hosting config: ${e}`);
->>>>>>> hosting-omages
         return null;
     }
 };
