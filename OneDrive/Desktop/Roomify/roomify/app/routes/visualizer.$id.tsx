@@ -41,8 +41,12 @@ const VisualizerId  =() =>{
                         ...project,
                         renderedImage: result.renderedImage
                     };
-                    await createProject({ item: updatedProject });
-                    setProject(updatedProject);
+                    const savedProject = await createProject({ item: updatedProject });
+                    if (savedProject) {
+                        setProject(updatedProject);
+                    } else {
+                        // surface a save error instead of pretending persistence succeeded
+                    }
                 }
             }
         }
