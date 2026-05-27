@@ -11,7 +11,7 @@ const VisualizerId  =() =>{
     const location = useLocation();
     const {initialImage: stateInitialImage, initialRender: stateInitialRender, name: stateName} = location.state || {};
     const {puterReady} = useOutletContext<AuthContext>();
-    const hasInitialGenerated = useRef(false);
+    const hasInitialGenerated = useRef<Record<string, boolean>>({});
 
     const [isProcessing, setIsProcessing] = useState(false);
     const [project, setProject] = useState<DesignItem | null>(location.state || null);
@@ -23,10 +23,16 @@ const VisualizerId  =() =>{
 
     const [currentImage, setCurrentImage] = useState<string | null>(initialRender || null);
 
+    useEffect(() => {
+        if (id) {
+            setCurrentImage(initialRender || null);
+        }
+    }, [id, initialRender]);
+
     const  handleBack = ()=> navigate('/');
 
     const runGeneration = async () => {
-        if (!initialImage) return;
+        if (!initialImage || !puterReady) return;
 
         try{
             setIsProcessing(true);
@@ -58,16 +64,18 @@ const VisualizerId  =() =>{
 
     }
     useEffect(() => {
-        if (!initialImage || hasInitialGenerated.current) return;
+        if (!id || !initialImage || !puterReady || hasInitialGenerated.current[id]) return;
+        
         if (initialRender){
             setCurrentImage(initialRender);
-            hasInitialGenerated.current=true;
+            hasInitialGenerated.current[id] = true;
             return;
         }
-        hasInitialGenerated.current=true;
+        
+        hasInitialGenerated.current[id] = true;
         runGeneration();
 
-    }, [initialImage, initialRender]);
+    }, [id, initialImage, initialRender, puterReady]);
     
     useEffect(() => {
         setProject(location.state || null);
