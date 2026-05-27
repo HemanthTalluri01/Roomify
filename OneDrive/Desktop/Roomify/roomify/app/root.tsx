@@ -56,11 +56,17 @@ export default function App() {
   const [puterReady, setPuterReady] = useState(false);
 
   useEffect(() => {
+    let attempts = 0;
+    const maxAttempts = 50; // 5 seconds total (50 * 100ms)
     const checkPuter = setInterval(() => {
+      attempts++;
       // @ts-ignore
       if (typeof window !== 'undefined' && window.puter) {
         console.log("Puter detected");
         setPuterReady(true);
+        clearInterval(checkPuter);
+      } else if (attempts >= maxAttempts) {
+        console.warn("Puter initialization timed out after 5 seconds");
         clearInterval(checkPuter);
       }
     }, 100);
