@@ -35,12 +35,12 @@ export const generate3DView= async ({ sourceImage}: Generate3DViewParams) =>{
     if(!mimeType || !base64data) throw new Error("Invalid source image payload");
 
     const response = await  puter.ai.txt2img(ROOMIFY_RENDER_PROMPT,{
-        // @ts-ignore
+        // `@ts-ignore`
         provider: "gemini",
         model: "gemini-2.5-flash-image-preview",
         input_image: base64data,
         input_image_mime_type: mimeType,
-        ratio: {w: 1024 ,h:102},
+        ratio: { w: 1024, h: 1024 },
     }) as any;
     console.log("AI Response:", response);
 
