@@ -33,6 +33,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <Meta />
         <Links />
+        <script src="https://js.puter.com/v2/puter.js"></script>
       </head>
       <body>
         {children}
@@ -52,46 +53,83 @@ const DEFAULT_AUTH_STATE: AuthState = {
 }
 export default function App() {
   const [authState, setAuthState] = useState<AuthState>(DEFAULT_AUTH_STATE);
+  const [puterReady, setPuterReady] = useState(false);
 
-  const refershAuth = async () => {
+  useEffect(() => {
+    let attempts = 0;
+    const maxAttempts = 50; // 5 seconds total (50 * 100ms)
+    const checkPuter = setInterval(() => {
+      attempts++;
+      // @ts-ignore
+      if (typeof window !== 'undefined' && window.puter) {
+        console.log("Puter detected");
+        setPuterReady(true);
+        clearInterval(checkPuter);
+      } else if (attempts >= maxAttempts) {
+        console.warn("Puter initialization timed out after 5 seconds");
+        clearInterval(checkPuter);
+      }
+    }, 100);
+    return () => clearInterval(checkPuter);
+  }, []);
+
+  const refreshAuth = async () => {
+    console.log("refreshAuth called");
 
     try {
       const user = await getCurrentUser();
+      console.log("User fetched in refreshAuth:", !!user);
 
       setAuthState({
         isSignedIn: !!user,
         userName: user?.username || null,
         userId: user?.uuid || null,
-
       });
 
       return !!user;
-
-    }catch{
+    } catch (e) {
+      console.error("refreshAuth failed:", e);
       setAuthState(DEFAULT_AUTH_STATE);
       return false;
     }
   }
 
-  useEffect(()=>{
-    refershAuth()
-  },[]);
+  useEffect(() => {
+    if (puterReady) {
+      console.log("Puter ready, triggering initial refreshAuth");
+      refreshAuth();
+    }
+  }, [puterReady]);
 
   const signIn= async () => {
-    await puterSignIn();
-    return await refershAuth();
+    try {
+      console.log("Calling signIn from puter.action");
+      await puterSignIn();
+      console.log("signIn call returned, refreshing auth...");
+      return await refreshAuth();
+    } catch (e) {
+      console.error("Sign in failed", e);
+      return false;
+    }
   }
 
   const signOut= async () => {
-     puterSignOut();
-    return await refershAuth();
+    try {
+      console.log("Calling signOut from puter.action");
+      await puterSignOut();
+      console.log("signOut call returned, refreshing auth...");
+      return await refreshAuth();
+    } catch (e) {
+      console.error("Sign out failed", e);
+      return false;
+    }
   }
 
   return (
       <main className="min-h-screen bg-background text-foreground relative z-10" >
 
         <Outlet
-            context={{...authState, refershAuth, signIn, signOut}}
+            context={{...authState, refreshAuth, signIn, signOut, puterReady}}
         />
       </main>
   )
