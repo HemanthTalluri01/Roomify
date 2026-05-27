@@ -72,7 +72,7 @@ export default function App() {
 
     try {
       const user = await getCurrentUser();
-      console.log("User fetched in refreshAuth:", user ? `${user.username} (${user.uuid})` : "null");
+      console.log("User fetched in refreshAuth:", !!user);
 
       setAuthState({
         isSignedIn: !!user,
