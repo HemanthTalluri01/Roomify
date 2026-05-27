@@ -8,11 +8,23 @@ const VisualizerId  =() =>{
     const {puterReady} = useOutletContext<AuthContext>();
     
     const [project, setProject] = useState<DesignItem | null>(location.state || null);
-    const [loading, setLoading] = useState(!location.state);
+    const [loading, setLoading] = useState(!location.state && puterReady);
+
+    useEffect(() => {
+        setProject(location.state || null);
+        setLoading(location.state ? false : (puterReady ? true : false));
+    }, [id, location.state, puterReady]);
 
     useEffect(() => {
         const fetchProject = async () => {
-            if (!id || !puterReady) return;
+            if (!puterReady) {
+                setLoading(false);
+                return;
+            }
+            if (!id) {
+                setLoading(false);
+                return;
+            }
             
             // If we already have the basic info from state, we might still want to fetch 
             // the full object if it's missing (e.g. on direct visit)
@@ -27,7 +39,7 @@ const VisualizerId  =() =>{
         };
 
         fetchProject();
-    }, [id, puterReady, project?.sourceImage]);
+    }, [id, puterReady]);
 
     if (loading) {
         return <div className="p-8 text-center">Loading project...</div>;
