@@ -1,187 +1,209 @@
-import React, {useEffect, useRef, useState} from 'react';
-import {useLocation, useParams, useOutletContext, useNavigate} from "react-router";
-import {createProject, getProject} from "../../lib/puter.action";
+import { useNavigate, useOutletContext, useParams} from "react-router";
+import {useEffect, useRef, useState} from "react";
 import {generate3DView} from "../../lib/ai.action";
 import {Box, Download, RefreshCcw, Share2, X} from "lucide-react";
-import Button from "~/components/ui/Button";
+import Button from "../components/ui/Button";
+import {createProject, getProjectById} from "../../lib/puter.action";
+import {ReactCompareSlider, ReactCompareSliderImage} from "react-compare-slider";
 
-const VisualizerId  =() =>{
+const VisualizerId = () => {
     const { id } = useParams();
     const navigate = useNavigate();
-    const location = useLocation();
-    const {initialImage: stateInitialImage, initialRender: stateInitialRender, name: stateName} = location.state || {};
-    const {puterReady} = useOutletContext<AuthContext>();
-    const hasInitialGenerated = useRef<Record<string, boolean>>({});
+    const { userId } = useOutletContext<AuthContext>()
+
+    const hasInitialGenerated = useRef(false);
+
+    const [project, setProject] = useState<DesignItem | null>(null);
+    const [isProjectLoading, setIsProjectLoading] = useState(true);
 
     const [isProcessing, setIsProcessing] = useState(false);
-    const [project, setProject] = useState<DesignItem | null>(location.state || null);
-    const [loading, setLoading] = useState(!location.state && puterReady);
+    const [currentImage, setCurrentImage] = useState<string | null>(null);
 
-    const initialImage = stateInitialImage || project?.sourceImage;
-    const initialRender = stateInitialRender || project?.renderedImage;
-    const name = stateName || project?.name;
+    const handleBack = () => navigate('/');
+    const handleExport = () => {
+        if (!currentImage) return;
 
-    const [currentImage, setCurrentImage] = useState<string | null>(initialRender || null);
+        const link = document.createElement('a');
+        link.href = currentImage;
+        link.download = `roomify-${id || 'design'}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
 
-    useEffect(() => {
-        if (id) {
-            setCurrentImage(initialRender || null);
-        }
-    }, [id, initialRender]);
+    const runGeneration = async (item: DesignItem) => {
+        if(!id || !item.sourceImage) return;
 
-    const  handleBack = ()=> navigate('/');
-
-    const runGeneration = async () => {
-        if (!initialImage || !puterReady) return;
-
-        try{
+        try {
             setIsProcessing(true);
-            const result = await generate3DView({sourceImage: initialImage});
+            const result = await generate3DView({ sourceImage: item.sourceImage });
 
-            if (result.renderedImage){
+            if(result.renderedImage) {
                 setCurrentImage(result.renderedImage);
 
-                //update the project with the rendered image.
-                if (project) {
-                    const updatedProject = {
-                        ...project,
-                        renderedImage: result.renderedImage
-                    };
-                    const savedProject = await createProject({ item: updatedProject });
-                    if (savedProject) {
-                        setProject(updatedProject);
-                    } else {
-                        // surface a save error instead of pretending persistence succeeded
-                    }
+                const updatedItem = {
+                    ...item,
+                    renderedImage: result.renderedImage,
+                    renderedPath: result.renderedPath,
+                    timestamp: Date.now(),
+                    ownerId: item.ownerId ?? userId ?? null,
+                    isPublic: item.isPublic ?? false,
+                }
+
+                const saved = await createProject({ item: updatedItem, visibility: "private" })
+
+                if(saved) {
+                    setProject(saved);
+                    setCurrentImage(saved.renderedImage || result.renderedImage);
                 }
             }
-        }
-        catch (error){
-            console.error("Generation failed:", error);
-        }finally {
+        } catch (error) {
+            console.error('Generation failed: ', error)
+        } finally {
             setIsProcessing(false);
         }
-
     }
-    useEffect(() => {
-        if (!id || !initialImage || !puterReady || hasInitialGenerated.current[id]) return;
-        
-        if (initialRender){
-            setCurrentImage(initialRender);
-            hasInitialGenerated.current[id] = true;
-            return;
-        }
-        
-        hasInitialGenerated.current[id] = true;
-        runGeneration();
-
-    }, [id, initialImage, initialRender, puterReady]);
-    
-    useEffect(() => {
-        setProject(location.state || null);
-        setLoading(location.state ? false : (puterReady ? true : false));
-    }, [id, location.state, puterReady]);
 
     useEffect(() => {
-        const fetchProject = async () => {
-            if (!puterReady) {
-                setLoading(false);
-                return;
-            }
+        let isMounted = true;
+
+        const loadProject = async () => {
             if (!id) {
-                setLoading(false);
+                setIsProjectLoading(false);
                 return;
             }
-            
-            // If we already have the basic info from state, we might still want to fetch 
-            // the full object if it's missing (e.g. on direct visit)
-            if (!project?.sourceImage) {
-                setLoading(true);
-                const data = await getProject(id);
-                if (data) {
-                    setProject(data);
-                }
-                setLoading(false);
-            }
+
+            setIsProjectLoading(true);
+
+            const fetchedProject = await getProjectById({ id });
+
+            if (!isMounted) return;
+
+            setProject(fetchedProject);
+            setCurrentImage(fetchedProject?.renderedImage || null);
+            setIsProjectLoading(false);
+            hasInitialGenerated.current = false;
         };
 
-        fetchProject();
-    }, [id, puterReady]);
+        loadProject();
 
-    if (loading) {
-        return <div className="p-8 text-center">Loading project...</div>;
-    }
+        return () => {
+            isMounted = false;
+        };
+    }, [id]);
 
-    if (!project) {
-        return <div className="p-8 text-center text-red-500">Project not found or failed to load.</div>;
-    }
+    useEffect(() => {
+        if (
+            isProjectLoading ||
+            hasInitialGenerated.current ||
+            !project?.sourceImage
+        )
+            return;
+
+        if (project.renderedImage) {
+            setCurrentImage(project.renderedImage);
+            hasInitialGenerated.current = true;
+            return;
+        }
+
+        hasInitialGenerated.current = true;
+        void runGeneration(project);
+    }, [project, isProjectLoading]);
 
     return (
+        <div className="visualizer">
+            <nav className="topbar">
+                <div className="brand">
+                    <Box className="logo" />
 
+                    <span className="name">Roomify</span>
+                </div>
+                <Button variant="ghost" size="sm" onClick={handleBack} className="exit">
+                    <X className="icon" /> Exit Editor
+                </Button>
+            </nav>
 
+            <section className="content">
+                <div className="panel">
+                    <div className="panel-header">
+                        <div className="panel-meta">
+                            <p>Project</p>
+                            <h2>{project?.name || `Residence ${id}`}</h2>
+                            <p className="note">Created by You</p>
+                        </div>
 
-           <div className="visualizer">
-               <nav className="topbar">
-                   <div className="brand">
-                       <Box className="logo" />
-                       <span className="name">
-                            Roomify
-                        </span>
-                   </div>
-                   <Button variant="ghost" size="sm" onClick={handleBack} className="exit">
-                       <X className="icon" /> Exit Editor
-                   </Button>
-               </nav>
+                        <div className="panel-actions">
+                            <Button
+                                size="sm"
+                                onClick={handleExport}
+                                className="export"
+                                disabled={!currentImage}
+                            >
+                                <Download className="w-4 h-4 mr-2" /> Export
+                            </Button>
+                            <Button size="sm" onClick={() => {}} className="share">
+                                <Share2 className="w-4 h-4 mr-2" />
+                                Share
+                            </Button>
+                        </div>
+                    </div>
 
-               <section className="content">
-                   <div className="panel">
-                       <div className="panel-header">
-                           <div className="panel-meta">
-                               <p>Project</p>
-                               <h2>{name || 'Untitled Project'}</h2>
-                               <p className="note">Created by You</p>
-                           </div>
-                           <div className="panel-actions">
-                               <Button  size="sm" className="export" onClick={()=>{}} disabled={!currentImage}>
-                                   <Download className="w-4 h-4 mr-2" />Export
-                               </Button>
-                               <Button  size="sm" className="share" onClick={()=>{}} disabled={isProcessing}>
-                                   <Share2 className="w-4 h-4 mr-2" />Share
-                               </Button>
+                    <div className={`render-area ${isProcessing ? 'is-processing': ''}`}>
+                        {currentImage ? (
+                            <img src={currentImage} alt="AI Render" className="render-img" />
+                        ) : (
+                            <div className="render-placeholder">
+                                {project?.sourceImage && (
+                                    <img src={project?.sourceImage} alt="Original" className="render-fallback" />
+                                )}
+                            </div>
+                        )}
 
-                           </div>
-                       </div>
-                       <div className={`render-area ${isProcessing ? 'is-processing' : ''}`}>
-                           {currentImage ? (
-                               <img src={currentImage} alt="AI Render" className="render-img" />
-                           ):(
-                               <div className="render-placeholder">
-                                   {initialImage && (
-                                       <img src={initialImage} alt="Original" className="render-fallback" />
-                                   )}
-                               </div>
-                           )}
+                        {isProcessing && (
+                            <div className="render-overlay">
+                                <div className="rendering-card">
+                                    <RefreshCcw className="spinner" />
+                                    <span className="title">Rendering...</span>
+                                    <span className="subtitle">Generating your 3D visualization</span>
+                                </div>
+                            </div>
+                        )}
+                    </div>
 
-                           {isProcessing && (
-                               <div className="render-overlay">
-                                   <div className="rendering-card">
-                                       <RefreshCcw className="spinner" />
-                                       <span className="title">Rendering...</span>
-                                       <span className="subtitle">Generating your 3D visualization</span>
+                </div>
 
-                                   </div>
-                               </div>
+                <div className="panel compare">
+                    <div className="panel-header">
+                        <div className="panel-meta">
+                            <p>Comparison</p>
+                            <h3>Before and After</h3>
+                        </div>
+                        <div className="hint">Drag to compare</div>
+                    </div>
 
-                           )}
-
-                       </div>
-
-                   </div>
-               </section>
-
-           </div>
-
-    );
+                    <div className="compare-stage">
+                        {project?.sourceImage && currentImage ? (
+                            <ReactCompareSlider
+                                defaultValue={50}
+                                style={{ width: '100%', height: 'auto' }}
+                                itemOne={
+                                    <ReactCompareSliderImage src={project?.sourceImage} alt="before" className="compare-img" />
+                                }
+                                itemTwo={
+                                    <ReactCompareSliderImage src={currentImage || project?.renderedImage || undefined} alt="after" className="compare-img" />
+                                }
+                            />
+                        ) : (
+                            <div className="compare-fallback">
+                                {project?.sourceImage && (
+                                    <img src={project.sourceImage} alt="Before" className="compare-img" />
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </section>
+        </div>
+    )
 }
-
-export default VisualizerId;
+export default VisualizerId

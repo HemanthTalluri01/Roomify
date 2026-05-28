@@ -1,0 +1,115 @@
+const router = puter.Router();
+const PROJECT_PREFIX = 'roomify_project_';
+
+const jsonResponse = (data, status = 200) => {
+    return new Response(JSON.stringify(data), {
+        status,
+        headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+        }
+    });
+}
+
+const jsonError = (status, message, extra = {}) => {
+    return jsonResponse({ error: message, ...extra }, status);
+}
+
+const getUserId = async (userPuter) => {
+    try {
+        const user = await userPuter.auth.getUser();
+        return user?.uuid || null;
+    } catch {
+        return null;
+    }
+}
+
+router.post('/api/projects/save', async ({ request, user }) => {
+    try {
+        const userPuter = user.puter;
+        if(!userPuter) return jsonError(401, 'Authentication failed');
+
+        const body = await request.json();
+        const project = body?.project;
+
+        if(!project?.id || !project?.sourceImage) return jsonError(400, 'Project ID and source image are required');
+
+        const payload = {
+            ...project,
+            updatedAt: new Date().toISOString(),
+        }
+
+        const userId = await getUserId(userPuter);
+        if(!userId) return jsonError(401, 'Authentication failed');
+
+        const key = `${PROJECT_PREFIX}${project.id}`;
+        await userPuter.kv.set(key, payload);
+
+        return jsonResponse({ saved: true, id: project.id, project: payload });
+    } catch (e) {
+        return jsonError(500, 'Failed to save project', { message: e.message || 'Unknown error' });
+    }
+})
+
+router.get('/api/projects/list', async ({ user }) => {
+    try {
+        const userPuter = user.puter;
+        if (!userPuter) return jsonError(401, 'Authentication failed');
+
+        const userId = await getUserId(userPuter);
+        if (!userId) return jsonError(401, 'Authentication failed');
+
+        const projects = (await userPuter.kv.list(PROJECT_PREFIX, true))
+            .map(item => {
+                let val = item.value;
+                if (typeof val === 'string') {
+                    try {
+                        val = JSON.parse(val);
+                    } catch (e) {
+                        return null;
+                    }
+                }
+                if (!val || typeof val !== 'object') return null;
+                return { ...val, isPublic: true };
+            })
+            .filter(item => item !== null)
+            .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+        return jsonResponse({ projects });
+    } catch (e) {
+        return jsonError(500, 'Failed to list projects', { message: e.message || 'Unknown error' });
+    }
+})
+
+router.get('/api/projects/get', async ({ request, user }) => {
+    try {
+        const userPuter = user.puter;
+        if (!userPuter) return jsonError(401, 'Authentication failed');
+
+        const userId = await getUserId(userPuter);
+        if (!userId) return jsonError(401, 'Authentication failed');
+
+        const url = new URL(request.url);
+        const id = url.searchParams.get('id');
+
+        if (!id) return jsonError(400, 'Project ID is required');
+
+        const key = `${PROJECT_PREFIX}${id}`;
+        let project = await userPuter.kv.get(key);
+        if (typeof project === 'string') {
+            try {
+                project = JSON.parse(project);
+            } catch (e) {}
+        }
+
+        if (!project) return jsonError(404, 'Project not found');
+
+        return jsonResponse({ project });
+    } catch (e) {
+        return jsonError(500, 'Failed to get project', { message: e.message || 'Unknown error' });
+    }
+})
+
+puter.handle(async (request) => {
+    return await router.handle(request);
+});

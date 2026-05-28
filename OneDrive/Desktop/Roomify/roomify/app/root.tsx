@@ -44,13 +44,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
   );
 }
 
-
 const DEFAULT_AUTH_STATE: AuthState = {
   isSignedIn: false,
   userName: null,
   userId: null,
-
 }
+
 export default function App() {
   const [authState, setAuthState] = useState<AuthState>(DEFAULT_AUTH_STATE);
   const [puterReady, setPuterReady] = useState(false);
@@ -75,7 +74,6 @@ export default function App() {
 
   const refreshAuth = async () => {
     console.log("refreshAuth called");
-
     try {
       const user = await getCurrentUser();
       console.log("User fetched in refreshAuth:", !!user);
@@ -101,7 +99,7 @@ export default function App() {
     }
   }, [puterReady]);
 
-  const signIn= async () => {
+  const signIn = async () => {
     try {
       console.log("Calling signIn from puter.action");
       await puterSignIn();
@@ -113,7 +111,7 @@ export default function App() {
     }
   }
 
-  const signOut= async () => {
+  const signOut = async () => {
     try {
       console.log("Calling signOut from puter.action");
       await puterSignOut();
@@ -126,13 +124,12 @@ export default function App() {
   }
 
   return (
-      <main className="min-h-screen bg-background text-foreground relative z-10" >
-
-        <Outlet
-            context={{...authState, refreshAuth, signIn, signOut, puterReady}}
-        />
-      </main>
-  )
+    <main className="min-h-screen bg-background text-foreground relative z-10">
+      <Outlet
+        context={{ ...authState, refreshAuth, signIn, signOut, puterReady }}
+      />
+    </main>
+  );
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
