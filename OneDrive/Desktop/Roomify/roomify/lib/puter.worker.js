@@ -1,3 +1,4 @@
+import puter from "@puter/sdk";
 const router = puter.Router();
 const PROJECT_PREFIX = 'roomify_project_';
 
